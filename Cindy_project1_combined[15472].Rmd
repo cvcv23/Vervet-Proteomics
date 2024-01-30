@@ -1,0 +1,386 @@
+---
+title: "Searching for potential Alzheimer’s disease biomarkers through vervet biomarker and behavior analysis, Cindy project1"
+author: "Tingting"
+date: "12/22/2021"
+output: html_document
+---
+
+```{r}
+library(xlsx)
+library(tidyverse)
+library(tidyr)
+library(lme4)
+```
+
+## Data cleaning
+Load biomarker data
+```{r}
+data <- read.xlsx("../input/LEMERE VERVET CSF-STANFORD RAW DATA_TZ.xls", header = T, sheetIndex = 1, check.names=FALSE)
+```
+
+```{r}
+rownames(data) <- data$Exp
+data <- data[,-1]  
+```
+
+Data transpose
+```{r}
+data_t <- as.data.frame(t(data))
+data_t$vervet_time <- rownames(data_t)
+data_t <- data_t[, c(616, 1:615)]
+```
+
+Load cohort data
+```{r}
+df_cohort <- read.xlsx('../input/Communicome cohort GB RP CL 12-17-2021_TZ.xlsx', header = T, sheetIndex = 7, check.names=FALSE)
+colnames(df_cohort) <- c("ID", "vervet_time", "Sex", "Age", "Cognition")
+```
+
+Add age group
+```{r}
+df_cohort$Age_group <- factor(cut(df_cohort$Age, breaks=c(0, 10, 15, 20, 100), labels=c("young", "middle", "middle old", "very old")))
+
+df_cohort$ID <- as.factor(df_cohort$ID)
+df_cohort$vervet_time <- as.factor(df_cohort$vervet_time)
+df_cohort$Sex <- as.factor(df_cohort$Sex)
+df_cohort$Age_group <- as.factor(df_cohort$Age_group)
+df_cohort$Cognition <- as.factor(df_cohort$Cognition)
+```
+
+Merge two sets of data
+```{r}
+df_merged <- merge(df_cohort, data_t, by=c("vervet_time", "vervet_time")) 
+```
+
+Clean merged data
+```{r}
+names(df_merged) <- gsub(" ", "_", names(df_merged))
+names(df_merged) <- gsub(x = names(df_merged), pattern = "\\(", replacement = "")  
+names(df_merged) <- gsub(x = names(df_merged), pattern = "\\)", replacement = "")  
+names(df_merged) <- gsub(x = names(df_merged), pattern = "\\-", replacement = "_")  
+```
+
+
+# Q1
+
+Explore: Linear regression of biomarker ~ ID + Age + Sex
+```{r}
+df <- df_merged
+
+ICAM2.age.sex.int.regression <- lm(ICAM2 ~ ID + Age + Sex, df)
+summary(ICAM2.age.sex.int.regression)
+```
+
+Extract age slop prob of linear regressions between biomarker ~ ID + Age + Sex
+```{r}
+df <- df_merged
+
+lm_multi_matrix <- matrix(0,length(df)-6,5)
+rownames(lm_multi_matrix) <- colnames(df[7: length(df)])
+reg_ls=c()
+for(i in colnames(df[7: length(df)])){
+  message(i)
+  lm_reg <-  paste(i, "~ ID", "+ Age", "+ Sex")
+  reg_ls <- lm(lm_reg, df)
+  lm_multi_matrix[i,1] <- paste(i, "~ ID", "+ Age", "+ Sex")
+  lm_multi_matrix[i,2] <- tryCatch(unname(1 - pf(summary(reg_ls)$fstatistic[1], summary(reg_ls)$fstatistic[2], summary(reg_ls)$fstatistic[3])), error = function(e) NA)
+  lm_multi_matrix[i,3] <- tryCatch(summary(reg_ls)$adj.r.squared, error = function(e) NA)
+  ## Below are Tingting's code, which is wrong because nrow(summary(reg_ls)$coefficients)-1 is not referred to the Age. See below full matrix. 
+  # lm_multi_matrix[i,4] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-1, 1], error = function(e) NA)
+  # lm_multi_matrix[i,5] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-1, 4], error = function(e) NA)
+  #   summary(reg_ls)$coefficients
+  #               Estimate Std. Error     t value   Pr(>|t|)
+  # (Intercept) 1526.49378  2584.5442  0.59062397 0.55675950
+  # ID113       1021.59688  1410.6486  0.72420366 0.47146202
+  # ID115       3264.53815  1410.6880  2.31414609 0.02373416
+  # ID118        545.83098  1471.9655  0.37081777 0.71194314
+  # ID125       3453.85477  1417.4613  2.43664837 0.01748754
+  # ID131        157.08322  1548.9665  0.10141163 0.91952658
+  # ID133       1096.12044  1479.2619  0.74099144 0.46128784
+  # ID134        812.16012  1410.5487  0.57577604 0.56669554
+  # ID137        740.04970  1439.3188  0.51416662 0.60882729
+  # ID140        325.64505  1436.5158  0.22669090 0.82135432
+  # ID143        195.09043  1420.0088  0.13738677 0.89113712
+  # ID144       1234.35934  1630.6190  0.75698819 0.45171084
+  # ID153        967.58387  1320.0866  0.73296998 0.46613350
+  # ID156       1242.25643  1640.3764  0.75729964 0.45152553
+  # ID157         76.04419  1429.6137  0.05319212 0.95773712
+  # ID160       1446.91709  1677.3908  0.86259986 0.39143465
+  # ID161       2460.05552  1320.1345  1.86348856 0.06677669
+  # ID175        471.60332  1431.3374  0.32948440 0.74281743
+  # ID179       1918.55204  1469.1749  1.30587042 0.19606258
+  # ID183        700.40213  1424.1086  0.49181792 0.62445559
+  # ID184        950.16021  1321.5128  0.71899435 0.47464465
+  # ID186        255.57011  1439.5375  0.17753627 0.85962283
+  # ID193       1036.99933  1546.8595  0.67039013 0.50491341
+  # ID195        947.02566  1434.5563  0.66015233 0.51141927
+  # ID199       3381.13605  1466.0794  2.30624349 0.02419801
+  # ID202        977.88239  1442.3296  0.67798815 0.50011403
+  # ID205       3054.16686  1411.2355  2.16417943 0.03401902
+  # ID208       1443.13290  1412.9367  1.02137125 0.31075244
+  # ID220        692.17470  1544.5001  0.44815453 0.65548756
+  # ID221       1782.89740  1543.1894  1.15533283 0.25205782
+  # ID229       -108.23640  1460.4735 -0.07411048 0.94114330
+  # ID230       3337.52196  1497.6294  2.22853657 0.02920444
+  # Age          -78.44865   131.5368 -0.59640093 0.55291722
+  
+  ## XD: fix as below on 10/23/2022
+  lm_multi_matrix[i,4] <- tryCatch(summary(reg_ls)$coefficients['Age', 1], error = function(e) NA)
+  lm_multi_matrix[i,5] <- tryCatch(summary(reg_ls)$coefficients['Age', 4], error = function(e) NA)
+  
+  }
+
+# rename lm_multi_matrix
+colnames(lm_multi_matrix) <- c("Linear regression", "F p-value", "Adjusted R-squared", "Age slope", "Age slope Pr")
+lm_multi_matrix <- as.data.frame(lm_multi_matrix)
+lm_multi_matrix[ , colnames(lm_multi_matrix[2: length(lm_multi_matrix)])] <- apply(lm_multi_matrix[ , colnames(lm_multi_matrix[2: length(lm_multi_matrix)])], 2, function(x) as.numeric(x))
+
+# add adjusted p-values
+lm_multi_matrix$`Fdr Age slope Pr` <- p.adjust(lm_multi_matrix$`Age slope Pr`, method = "fdr")
+
+lm_multi_matrix$`Bonferroni Age slope Pr` <- p.adjust(lm_multi_matrix$`Age slope Pr`, method = "bonferroni")
+
+write.csv(lm_multi_matrix, file="../output/1_Lm_Biomarker_AgeMultiPredictor.FIXED.csv")
+
+# save Age pro significant
+lm_multi_matrix_sig <- subset(lm_multi_matrix, lm_multi_matrix$`Age slope Pr` < 0.05)
+write.csv(lm_multi_matrix_sig, file="../output/1_Lm_Biomarker_AgeMultiPredictor_sig.FIXED.csv")
+```
+
+Scatterplot: biomarker vs. age for age pro significant biomarkers, taking intercept and age slope from biomarker ~ ID + Age + Sex
+```{r}
+# slope is affected by ID
+df_sig <- lm_multi_matrix_sig
+
+pdf(file = "../output/1_Scatterplot_Biomarker_Age_Sig.FIXED.pdf", width = 8, height = 6) 
+
+for(i in rownames(df_sig)){
+  p = ggplot(df, aes(Age, df[[i]], color=Sex)) + xlab("Age") + ylab(i) +
+    theme(axis.text=element_text(size=12), axis.title=element_text(size=14, face="bold")) +
+    geom_point() + 
+    geom_abline(intercept = coef(lm(df[[i]] ~ ID + Age + Sex , df))["(Intercept)"], slope = coef(lm(df[[i]] ~ ID + Age + Sex , df))['Age'], col='red', size=1.5) +
+    annotate("text", x=Inf, y=Inf, hjust=1, vjust=1, label =paste0("Age slope: ", coef(lm(df[[i]] ~ ID + Age + Sex , df))['Age']) )
+  print(p)
+  }
+
+dev.off()
+```
+
+# Q2: Linear regression of biomarker ~ Age + ID + Sex + Age:Cognition, (Cognition=ORT_global)
+
+Explore: Linear regression of biomarker ~ ID + Age + Sex + Age:Cognition
+```{r}
+df <- df_merged
+
+ICAM2.age.sex.int.regression <- lm(ICAM2 ~ ID + Age + Sex + Age:Cognition, df)
+summary(ICAM2.age.sex.int.regression)
+```
+
+Extract age slop prob of linear regressions between biomarker ~ ID + Age + Sex + Age:Cognition
+```{r}
+df <- df_merged
+
+lm_multi_matrix <- matrix(0,length(df)-6,11)
+rownames(lm_multi_matrix) <- colnames(df[7: length(df)])
+reg_ls=c()
+for(i in colnames(df[7: length(df)])){
+  lm_reg <-  paste(i, "~ ID", "+ Age", "+ Sex", "+ Age:Cognition")
+  reg_ls <- lm(lm_reg, df)
+  lm_multi_matrix[i,1] <- paste(i, "~ ID", "+ Age", "+ Sex", "+ Age:Cognition")
+  lm_multi_matrix[i,2] <- tryCatch(unname(1 - pf(summary(reg_ls)$fstatistic[1], summary(reg_ls)$fstatistic[2], summary(reg_ls)$fstatistic[3])), error = function(e) NA)
+  lm_multi_matrix[i,3] <- tryCatch(summary(reg_ls)$adj.r.squared, error = function(e) NA)
+  ## see above reason, the following code from TT are also not correct and fixed accordingly. 
+  # lm_multi_matrix[i,4] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-3, 1], error = function(e) NA)
+  # lm_multi_matrix[i,5] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-3, 4], error = function(e) NA)
+  # lm_multi_matrix[i,6] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-2, 1], error = function(e) NA)
+  # lm_multi_matrix[i,7] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-2, 4], error = function(e) NA)
+  # lm_multi_matrix[i,8] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-1, 1], error = function(e) NA)
+  # lm_multi_matrix[i,9] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients)-1, 4], error = function(e) NA)
+  # lm_multi_matrix[i,10] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients), 1], error = function(e) NA)
+  # lm_multi_matrix[i,11] <- tryCatch(summary(reg_ls)$coefficients[nrow(summary(reg_ls)$coefficients), 4], error = function(e) NA)
+  # FIXED: 10/23/2022 by XD
+  lm_multi_matrix[i,4] <- tryCatch(summary(reg_ls)$coefficients['Age', 1], error = function(e) NA)
+  lm_multi_matrix[i,5] <- tryCatch(summary(reg_ls)$coefficients['Age', 4], error = function(e) NA)
+  lm_multi_matrix[i,6] <- tryCatch(summary(reg_ls)$coefficients['Sexm', 1], error = function(e) NA)
+  lm_multi_matrix[i,7] <- tryCatch(summary(reg_ls)$coefficients['Sexm', 4], error = function(e) NA)
+  lm_multi_matrix[i,8] <- tryCatch(summary(reg_ls)$coefficients['Age:CognitionSolidly bad', 1], error = function(e) NA)
+  lm_multi_matrix[i,9] <- tryCatch(summary(reg_ls)$coefficients['Age:CognitionSolidly bad', 4], error = function(e) NA)
+  lm_multi_matrix[i,10] <- tryCatch(summary(reg_ls)$coefficients['Age:CognitionSolidly good', 1], error = function(e) NA)
+  lm_multi_matrix[i,11] <- tryCatch(summary(reg_ls)$coefficients['Age:CognitionSolidly good', 4], error = function(e) NA)
+  
+  }
+
+# rename lm_multi_matrix
+colnames(lm_multi_matrix) <- c("Linear regression", "F p-value", "Adjusted R-squared", "Age slope", "Age slope Pr", "Sexm slope", "Sexm slope Pr", "Age:CognitionSolidly bad slope", "Age:CognitionSolidly bad slope Pr", "Age:CognitionSolidly good slope", "Age:CognitionSolidly good slope Pr")
+lm_multi_matrix <- as.data.frame(lm_multi_matrix)
+lm_multi_matrix[ , colnames(lm_multi_matrix[2: length(lm_multi_matrix)])] <- apply(lm_multi_matrix[ , colnames(lm_multi_matrix[2: length(lm_multi_matrix)])], 2, function(x) as.numeric(x))
+
+# add adjusted p-values
+lm_multi_matrix$`Fdr Age slope Pr` <- p.adjust(lm_multi_matrix$`Age slope Pr`, method = "fdr")
+lm_multi_matrix$`Fdr Sexm slope Pr` <- p.adjust(lm_multi_matrix$`Sexm slope Pr`, method = "fdr")
+lm_multi_matrix$`Fdr Age:CognitionSolidly bad slope Pr` <- p.adjust(lm_multi_matrix$`Age:CognitionSolidly bad slope Pr`, method = "fdr")
+lm_multi_matrix$`Fdr Age:CognitionSolidly good slope Pr` <- p.adjust(lm_multi_matrix$`Age:CognitionSolidly good slope Pr`, method = "fdr")
+
+
+lm_multi_matrix$`Bonferroni Age slope Pr` <- p.adjust(lm_multi_matrix$`Age slope Pr`, method = "bonferroni")
+lm_multi_matrix$`Bonferroni Sexm slope Pr` <- p.adjust(lm_multi_matrix$`Sexm slope Pr`, method = "bonferroni")
+lm_multi_matrix$`Bonferroni Age:CognitionSolidly bad slope Pr` <- p.adjust(lm_multi_matrix$`Age:CognitionSolidly bad slope Pr`, method = "bonferroni")
+lm_multi_matrix$`Bonferroni Age:CognitionSolidly good slope Pr` <- p.adjust(lm_multi_matrix$`Age:CognitionSolidly good slope Pr`, method = "bonferroni")
+
+write.csv(lm_multi_matrix, file="../output/2_Lm_Biomarker_AgeMultiPredictor.FIXED.csv")
+
+# save Age pro significant
+lm_multi_matrix_sig <- subset(lm_multi_matrix, lm_multi_matrix$`Age slope Pr` < 0.05)
+write.csv(lm_multi_matrix_sig, file="../output/2_Lm_Biomarker_AgeMultiPredictor_sig.FIXED.csv")
+```
+
+Scatterplot for one: biomarker vs. age for age pro significant biomarkers, taking intercept and age slope in ORT global group from biomarker ~ ID + Age + Sex + Age:Cognition
+```{r}
+df <- df_merged
+
+coefSum <- coef(lm(ICAM2 ~ ID + Age + Sex + Age:Cognition, df))
+
+ggplot(df, aes(Age, ICAM2, color=Cognition, shape=Sex)) + xlab("Age") + ylab(i) +
+  theme(axis.text=element_text(size=12), axis.title=element_text(size=14, face="bold")) +
+  geom_point() + 
+  geom_abline(intercept = coefSum['(Intercept)'], slope = coefSum['Age'], col='#F8766D', size=1.5) +
+  geom_abline(intercept = coefSum['(Intercept)'], slope = coefSum['Age:CognitionSolidly bad'] + coefSum['Age'], col='#7CAE00', size=1.5) +
+  geom_abline(intercept = coefSum['(Intercept)'], slope = coefSum['Age:CognitionSolidly good'] + coefSum['Age'], col='#619CFF', size=1.5) +
+  annotate("text", x=Inf, y=Inf, hjust=1, vjust=1, color="#F8766D", label =paste0("Slope of cognition declining: ", coefSum['Age'])) +
+  annotate("text", x=Inf, y=Inf, hjust=1, vjust=3, color="#7CAE00", label =paste0("Slope of cognition solidly bad: ", coefSum['Age:CognitionSolidly bad'] + coefSum['Age'])) +
+  annotate("text", x=Inf, y=Inf, hjust=1, vjust=5, color="#619CFF", label =paste0("Slope of cognition solidly good: ", coefSum['Age:CognitionSolidly good'] + coefSum['Age']) )
+
+```
+
+Scatterplot for all: biomarker vs. age for age pro significant biomarkers, taking intercept and age slope in ORT global group from biomarker ~ ID + Age + Sex + Age:Cognition
+```{r}
+df <- df_merged
+#df_sig <- lm_multi_matrix_sig
+
+pdf(file = "../output/2_Scatterplot_Biomarker_Age_ORTgroup.pdf", width = 8, height = 6) 
+
+for(i in colnames(df[7: length(df)])){
+  coefSum <- coef(lm(df[[i]] ~ ID + Age + Sex + Age:Cognition, df))
+  p = ggplot(df, aes(Age, df[[i]], color=Cognition, shape=Sex)) + xlab("Age") + ylab(i) +
+    theme(axis.text=element_text(size=12), axis.title=element_text(size=14, face="bold")) +
+    geom_point() + 
+    geom_abline(intercept = coefSum['(Intercept)'], slope = coefSum['Age'], col='#F8766D', size=1.5) +
+    geom_abline(intercept = coefSum['(Intercept)'], slope = coefSum['Age:CognitionSolidly bad'] + coefSum['Age'], col='#7CAE00', size=1.5) +
+    geom_abline(intercept = coefSum['(Intercept)'], slope = coefSum['Age:CognitionSolidly good'] + coefSum['Age'], col='#619CFF', size=1.5) +
+    annotate("text", x=Inf, y=Inf, hjust=1, vjust=1, color="#F8766D", label =paste0("Slope of cognition declining: ", coefSum['Age'])) +
+    annotate("text", x=Inf, y=Inf, hjust=1, vjust=3, color="#7CAE00", label =paste0("Slope of cognition solidly bad: ", coefSum['Age:CognitionSolidly bad'] + coefSum['Age'])) +
+    annotate("text", x=Inf, y=Inf, hjust=1, vjust=5, color="#619CFF", label =paste0("Slope of cognition solidly good: ", coefSum['Age:CognitionSolidly good'] + coefSum['Age']) )
+  print(p)
+  }
+
+dev.off()
+```
+
+
+# Q3 ANOVA, Biomarker on Cognition groups
+
+Input file
+```{r}
+df <- df_merged
+```
+
+Boxplot of an example biomarker on Cognition group
+```{r}
+#pdf(file = "../output/BoxplotBiomarkerORTgGroup.pdf", width = 6, height = 6)
+boxplot(df$A2M_hu ~ droplevels(df$Cognition), xlab = "ORT global groups", ylab = "A2M_hu", cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5)
+#dev.off()
+```
+
+Boxplot of individual biomarker on ORT global groups for all
+```{r include=FALSE}
+pdf(file = "../output/3_Boxplot_Biomarker_ORTgGroup.pdf", width = 6, height = 6)
+
+for(i in colnames(df[7: length(df)])){
+  boxplot(df[[i]] ~ droplevels(df$Cognition), xlab = "ORT global groups", ylab = i, cex.lab=1.5, cex.axis=1, cex.main=1.5, cex.sub=1.5, outline=FALSE)
+  stripchart(df[[i]] ~ droplevels(df$Cognition), method = "jitter", pch = 19, col = 2:4, vertical = TRUE, add = TRUE)
+  }
+
+dev.off()
+```
+
+ANOVA between ORT global groups for an individual biomarker
+```{r}
+anovatest <- aov(df$A2M_hu~ df$Cognition)
+summary(anovatest)
+```
+
+
+Loop through biomarker data for ANOVA test on ORT global groups
+```{r}
+anova_matrix <- matrix(0,length(df)-6,1)
+rownames(anova_matrix) <- colnames(df[7: length(df)])
+for(i in colnames(df[7: length(df)])){
+ if(length(unique(df[["Cognition"]][!is.na(df[[i]])])) < 3){ # ort score groups should have at least 3 levels. If not, assign NA to that i=biomarker
+   anova_matrix[i, ] <- NA
+   next
+ }
+probability=summary(aov(df[[i]] ~ df[["Cognition"]]))[[1]][["Pr(>F)"]][1]
+if(!is.null(probability))
+  anova_matrix[i,1] <- summary(aov(df[[i]] ~ df[["Cognition"]]))[[1]][["Pr(>F)"]][1]
+}
+
+# rename and output
+colnames(anova_matrix) <- c("ANOVA ORT global group Pr")
+anova_matrix <- as.data.frame(anova_matrix)
+
+# add adjusted p-value
+anova_matrix$Fdr <- p.adjust(anova_matrix$`ANOVA ORT global group Pr`, method = "fdr" )
+anova_matrix$Bonferroni <- p.adjust(anova_matrix$`ANOVA ORT global group Pr`, method = "bonferroni" )
+write.csv(anova_matrix, file="../output/3_Biomarker_ORTgGroup_Anova.csv")
+```
+
+
+# Q3 t-test, Biomarker on Cognition groups
+
+Explore t-test between two selected ORT global groups for an individual biomarker
+```{r}
+ttest <- t.test(df$A2M_hu[df$Cognition=="Declining"], df$A2M_hu[df$Cognition=="Solidly bad"])
+names(ttest)
+ttest$p.value
+```
+
+
+Loop through biomarker data for two sample t-test on ORT global groups
+```{r}
+ttest_matrix <- matrix(0,length(df)-6, 3)
+rownames(ttest_matrix) <- colnames(df[7: length(df)])
+for(i in colnames(df[7: length(df)])){
+    if(length(unique(df[df$Cognition=="Declining" & !is.na(df[[i]]), c(i)])) >= 2 & length(unique(df[df$Cognition=="Solidly bad" & !is.na(df[[i]]), c(i)])) >= 2) #ttest in each group must have at least two unique numbers
+      ttest_matrix[i,1] <-  t.test(as.numeric(df[df$Cognition=="Declining", c(i)]), as.numeric(df[df$Cognition=="Solidly bad", c(i)]))$p.value
+    else
+      ttest_matrix[i,1] <- NA
+    
+    if(length(unique(df[df$Cognition=="Declining" & !is.na(df[[i]]), c(i)])) >= 2 & length(unique(df[df$Cognition=="Solidly good" & !is.na(df[[i]]), c(i)])) >= 2) #ttest in each group must have at least two unique numbers
+      ttest_matrix[i,2] <-  t.test(as.numeric(df[df$Cognition=="Declining", c(i)]), as.numeric(df[df$Cognition=="Solidly good", c(i)]))$p.value
+    else
+      ttest_matrix[i,2] <- NA
+
+    if(length(unique(df[df$Cognition=="Solidly bad" & !is.na(df[[i]]), c(i)])) >= 2 & length(unique(df[df$Cognition=="Solidly good" & !is.na(df[[i]]), c(i)])) >= 2) #ttest in each group must have at least two unique numbers
+      ttest_matrix[i,3] <-  t.test(as.numeric(df[df$Cognition=="Solidly bad", c(i)]), as.numeric(df[df$Cognition=="Solidly good", c(i)]))$p.value
+    else
+      ttest_matrix[i,3] <- NA
+}
+
+# rename table
+colnames(ttest_matrix) <- c("P-value of Declining vs. Solidly bad", "P-value of Declining vs. Solidly good", "P-value of Solidly bad vs. Solidly good")
+ttest_matrix <- as.data.frame(ttest_matrix)
+
+# add adjusted p-values
+ttest_matrix$`Fdr Declining vs. Solidly bad` <- p.adjust(ttest_matrix$`P-value of Declining vs. Solidly bad`, method = "fdr")
+ttest_matrix$`Fdr Declining vs. Solidly good` <- p.adjust(ttest_matrix$`P-value of Declining vs. Solidly good`, method = "fdr")
+ttest_matrix$`Fdr Solidly bad vs. Solidly good` <- p.adjust(ttest_matrix$`P-value of Solidly bad vs. Solidly good`, method = "fdr")
+
+
+ttest_matrix$`Bonferroni Declining vs. Solidly bad` <- p.adjust(ttest_matrix$`P-value of Declining vs. Solidly bad`, method = "bonferroni")
+ttest_matrix$`Bonferroni Declining vs. Solidly good` <- p.adjust(ttest_matrix$`P-value of Declining vs. Solidly good`, method = "bonferroni")
+ttest_matrix$`Bonferroni Solidly bad vs. Solidly good` <- p.adjust(ttest_matrix$`P-value of Solidly bad vs. Solidly good`, method = "bonferroni")
+
+# save output
+write.csv(ttest_matrix, file="../output/3_Biomarker_ORTgGroup_tTest.csv")
+```
+
