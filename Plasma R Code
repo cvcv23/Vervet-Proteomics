@@ -24,7 +24,7 @@ outdir="../output/"
 
 Load data
 ```{r}
-df <- read.xlsx('../input/VERVET PLASMA RBM-ALL DATA3_TZ.xlsx', header = T, sheetIndex = 1)
+df <- read.xlsx(file.choose(), header = T, sheetIndex = 1)
 ```
 
 Change some cols from chr to numeric
